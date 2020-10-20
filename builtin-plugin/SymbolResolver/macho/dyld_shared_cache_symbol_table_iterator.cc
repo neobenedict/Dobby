@@ -17,9 +17,11 @@
 #undef LOG_TAG
 #define LOG_TAG "DobbySymbolResolverCache"
 
+#if 0
 extern "C" {
 int __shared_region_check_np(uint64_t *startaddress);
 }
+#endif
 
 static pthread_once_t mmap_dyld_shared_cache_once = PTHREAD_ONCE_INIT;
 
@@ -32,9 +34,8 @@ void *get_shared_cache_load_addr() {
   static void *shared_cache_load_addr = 0;
   if (shared_cache_load_addr)
     return shared_cache_load_addr;
-#if __i386__
   if (syscall(294, &shared_cache_load_addr) == 0) {
-#else
+#if 0
   if (__shared_region_check_np((uint64_t *)&shared_cache_load_addr) == 0) {
 #endif
     return shared_cache_load_addr;
@@ -53,7 +54,8 @@ void mmap_dyld_shared_cache() {
     fd = open(cache_file_path, O_RDONLY, 0);
   }
   if (fd == -1) {
-    FATAL("open %s failed", cache_file_path);
+    ERROR_LOG("open %s failed", cache_file_path);
+    return;
   }
 
   struct dyld_cache_header *mmap_shared_cache_header;
@@ -68,8 +70,10 @@ void mmap_dyld_shared_cache() {
   mmap_shared_cache =
       (struct dyld_cache_header *)((addr_t)mmap_shared_cache - mmap_shared_cache_header->localSymbolsOffset);
 
-  if (mmap_shared_cache == MAP_FAILED)
-    FATAL("mmap shared cache failed");
+  if (mmap_shared_cache == MAP_FAILED) {
+    ERROR_LOG("mmap shared cache failed");
+    return;
+  }
 
   g_mmap_shared_cache_header = mmap_shared_cache_header;
   g_mmap_shared_cache        = mmap_shared_cache;
@@ -77,8 +81,8 @@ void mmap_dyld_shared_cache() {
 
 // refer: dyld
 bool is_addr_in_dyld_shared_cache(addr_t addr, size_t length) {
-  addr_t cache_base_address        = (addr_t)get_shared_cache_load_addr();
-  struct dyld_cache_header *header = (struct dyld_cache_header *)cache_base_address;
+  addr_t                    cache_base_address = (addr_t)get_shared_cache_load_addr();
+  struct dyld_cache_header *header             = (struct dyld_cache_header *)cache_base_address;
 
   const struct dyld_cache_mapping_info *mappings =
       (struct dyld_cache_mapping_info *)((char *)cache_base_address + header->mappingOffset);
@@ -91,7 +95,7 @@ bool is_addr_in_dyld_shared_cache(addr_t addr, size_t length) {
 
   // walk cache regions
   const struct dyld_cache_mapping_info *mappingsEnd = &mappings[header->mappingCount];
-  uintptr_t unslidEnd                               = unslidStart + length;
+  uintptr_t                             unslidEnd   = unslidStart + length;
   for (const struct dyld_cache_mapping_info *m = mappings; m < mappingsEnd; ++m) {
     if ((unslidStart >= m->address) && (unslidEnd < (m->address + m->size))) {
       return true;
@@ -104,14 +108,14 @@ void get_syms_in_dyld_shared_cache(void *image_header, uintptr_t *nlist_array_pt
                                    uint32_t *nlist_count_ptr) {
   pthread_once(&mmap_dyld_shared_cache_once, mmap_dyld_shared_cache);
 
-  addr_t cache_base_address        = (addr_t)get_shared_cache_load_addr();
-  struct dyld_cache_header *header = (struct dyld_cache_header *)cache_base_address;
+  addr_t                    cache_base_address = (addr_t)get_shared_cache_load_addr();
+  struct dyld_cache_header *header             = (struct dyld_cache_header *)cache_base_address;
 
   uint64_t textOffsetInCache = (uint64_t)image_header - (uint64_t)header;
 
-  nlist_t *localNlists     = NULL;
-  uint32_t localNlistCount = 0;
-  const char *localStrings = NULL;
+  nlist_t *   localNlists     = NULL;
+  uint32_t    localNlistCount = 0;
+  const char *localStrings    = NULL;
 
   static struct dyld_cache_local_symbols_info *localsInfo = NULL;
   localsInfo = (struct dyld_cache_local_symbols_info *)((addr_t)g_mmap_shared_cache + header->localSymbolsOffset);

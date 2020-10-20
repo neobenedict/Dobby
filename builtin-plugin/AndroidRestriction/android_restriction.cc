@@ -86,7 +86,7 @@ std::vector<soinfo_t> linker_get_solist() {
 
     // Generate the name for an offset.
 #define PARAM_OFFSET(type_, member_) __##type_##__##member_##__offset_
-#define STRUCT_OFFSET PARAM_OFFSET
+#define STRUCT_OFFSET                PARAM_OFFSET
   int STRUCT_OFFSET(solist, next) = 0;
   for (size_t i = 0; i < 1024 / sizeof(void *); i++) {
     if (*(addr_t *)((addr_t)solist_head + i * sizeof(void *)) == somain) {
@@ -123,7 +123,7 @@ uintptr_t linker_soinfo_to_handle(soinfo_t soinfo) {
   return _linker_soinfo_to_handle(soinfo);
 }
 
-typedef void *android_namespace_t;
+typedef void *      android_namespace_t;
 android_namespace_t linker_soinfo_get_primary_namespace(soinfo_t soinfo) {
   static android_namespace_t (*_get_primary_namespace)(soinfo_t) = NULL;
   if (!_get_primary_namespace)
@@ -176,7 +176,7 @@ static int iterate_soinfo_cb(soinfo_t soinfo) {
 
 bool (*orig_linker_namespace_is_is_accessible)(android_namespace_t ns, const std::string &file);
 bool linker_namespace_is_is_accessible(android_namespace_t ns, const std::string &file) {
-  LOG("check %s", file.c_str());
+  DLOG("check %s", file.c_str());
   return true;
   return orig_linker_namespace_is_is_accessible(ns, file);
 }
@@ -191,5 +191,5 @@ void linker_disable_namespace_restriction() {
   DobbyHook(linker_namespace_is_is_accessible_ptr, (void *)linker_namespace_is_is_accessible,
             (void **)&orig_linker_namespace_is_is_accessible);
 
-  LOG("disable namespace restriction done");
+  DLOG("disable namespace restriction done");
 }

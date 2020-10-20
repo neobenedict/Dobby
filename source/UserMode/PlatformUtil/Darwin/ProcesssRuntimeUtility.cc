@@ -26,8 +26,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
-#include "UserMode/UnifiedInterface/platform-darwin/mach_vm.h"
-#include "UserMode/PlatformUtil/ProcessRuntimeUtility.h"
+#include "UnifiedInterface/platform-darwin/mach_vm.h"
+#include "PlatformUtil/ProcessRuntimeUtility.h"
 
 #include <vector>
 
@@ -45,10 +45,10 @@ std::vector<MemoryRegion> ProcessRuntimeUtility::GetProcessMemoryLayout() {
   }
 
   struct vm_region_submap_short_info_64 submap_info;
-  mach_msg_type_number_t count = VM_REGION_SUBMAP_SHORT_INFO_COUNT_64;
-  mach_vm_address_t addr       = 0;
-  mach_vm_size_t size          = 0;
-  natural_t depth              = 0;
+  mach_msg_type_number_t                count = VM_REGION_SUBMAP_SHORT_INFO_COUNT_64;
+  mach_vm_address_t                     addr  = 0;
+  mach_vm_size_t                        size  = 0;
+  natural_t                             depth = 0;
   while (true) {
     count = VM_REGION_SUBMAP_SHORT_INFO_COUNT_64;
     kern_return_t kr =
@@ -75,14 +75,51 @@ std::vector<MemoryRegion> ProcessRuntimeUtility::GetProcessMemoryLayout() {
         continue;
       }
       MemoryRegion region = {(void *)addr, static_cast<size_t>(size), permission};
-      // LOG("%p - %p", addr, addr + size);
+#if 0
+      LOG("%p - %p", addr, addr + size);
+#endif
       ProcessMemoryLayout.push_back(region);
-
-      addr += size;
     }
+
+    addr += size;
   }
 
   std::sort(ProcessMemoryLayout.begin(), ProcessMemoryLayout.end(), memory_region_comparator);
 
   return ProcessMemoryLayout;
+}
+
+// ================================================================
+// GetProcessModuleMap
+
+std::vector<RuntimeModule> ProcessModuleMap;
+std::vector<RuntimeModule> ProcessRuntimeUtility::GetProcessModuleMap() {
+  if (!ProcessMemoryLayout.empty()) {
+    ProcessMemoryLayout.clear();
+  }
+  int image_count = _dyld_image_count();
+  for (size_t i = 0; i < image_count; i++) {
+    const struct mach_header *header = NULL;
+    header                           = _dyld_get_image_header(i);
+    const char *path                 = NULL;
+    path                             = _dyld_get_image_name(i);
+
+    RuntimeModule module = {0};
+    {
+      strncpy(module.path, path, sizeof(module.path));
+      module.load_address = (void *)header;
+    }
+    ProcessModuleMap.push_back(module);
+  }
+  return ProcessModuleMap;
+}
+
+RuntimeModule ProcessRuntimeUtility::GetProcessModule(const char *name) {
+  std::vector<RuntimeModule> ProcessModuleMap = GetProcessModuleMap();
+  for (auto module : ProcessModuleMap) {
+    if (strstr(module.path, name) != 0) {
+      return module;
+    }
+  }
+  return RuntimeModule{0};
 }

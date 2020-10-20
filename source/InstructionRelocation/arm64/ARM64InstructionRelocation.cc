@@ -115,15 +115,15 @@ static inline int decode_rd(uint32_t instr) {
   return bits(instr, 0, 4);
 }
 
-void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated) {
+void GenRelocateCode(void *buffer, AssemblyCodeChunk *origin, AssemblyCodeChunk *relocated) {
   TurboAssembler turbo_assembler_(0);
 #define _ turbo_assembler_.
 
   uint64_t curr_orig_pc = origin->raw_instruction_start();
   uint64_t curr_relo_pc = relocated->raw_instruction_start();
 
-  addr_t buffer_cursor = (addr_t)buffer;
-  arm64_inst_t instr   = *(arm64_inst_t *)buffer_cursor;
+  addr_t       buffer_cursor = (addr_t)buffer;
+  arm64_inst_t instr         = *(arm64_inst_t *)buffer_cursor;
 
   int predefined_relocate_size = origin->raw_instruction_size();
 
@@ -131,18 +131,18 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
     int last_relo_offset = turbo_assembler_.GetCodeBuffer()->getSize();
 
     if ((instr & LoadRegLiteralFixedMask) == LoadRegLiteralFixed) { // ldr x0, #16
-      int rt                  = decode_rt(instr);
-      char opc                = bits(instr, 30, 31);
+      int      rt             = decode_rt(instr);
+      char     opc            = bits(instr, 30, 31);
       addr64_t memory_address = decode_imm19_offset(instr) + curr_orig_pc;
 
 #define MEM(reg, offset) MemOperand(reg, offset)
       _ nop(); // for debug
       {
-        _ Mov(X(17), memory_address); // should we replace with `Ldr` to set  X17 ?
+        _ Mov(TMP_REG_0, memory_address); // should we replace with `Ldr` to set  X17 ?
         if (opc == 0b00)
-          _ ldr(W(rt), MEM(X(17), 0));
+          _ ldr(W(rt), MEM(TMP_REG_0, 0));
         else if (opc == 0b01)
-          _ ldr(X(rt), MEM(X(17), 0));
+          _ ldr(X(rt), MEM(TMP_REG_0, 0));
         else {
           UNIMPLEMENTED();
         }
@@ -151,7 +151,7 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
     } else if ((instr & PCRelAddressingFixedMask) == PCRelAddressingFixed) {
       int rd = decode_rd(instr);
 
-      int64_t imm              = 0;
+      int64_t  imm             = 0;
       addr64_t runtime_address = 0;
       if ((instr & PCRelAddressingMask) == ADR) {
         imm             = decode_immhi_immlo_offset(instr);
@@ -169,24 +169,24 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
       _ nop();
 
     } else if ((instr & UnconditionalBranchFixedMask) == UnconditionalBranchFixed) { // b xxx
-      addr_t branch_address               = decode_imm26_offset(instr) + curr_orig_pc;
+      addr_t           branch_address     = decode_imm26_offset(instr) + curr_orig_pc;
       RelocLabelEntry *branchAddressLabel = new RelocLabelEntry(branch_address);
-      _ AppendRelocLabelEntry(branchAddressLabel);
+      _                AppendRelocLabelEntry(branchAddressLabel);
 
       _ nop();
       {
-        _ Ldr(x17, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
+        _ Ldr(TMP_REG_0, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
         if ((instr & UnconditionalBranchMask) == BL) {
-          _ blr(x17);
+          _ blr(TMP_REG_0);
         } else {
-          _ br(x17);
+          _ br(TMP_REG_0);
         }
       }
       _ nop();
     } else if ((instr & TestBranchFixedMask) == TestBranchFixed) { // tbz, tbnz
-      addr64_t branch_address             = decode_imm14_offset(instr) + curr_orig_pc;
+      addr64_t         branch_address     = decode_imm14_offset(instr) + curr_orig_pc;
       RelocLabelEntry *branchAddressLabel = new RelocLabelEntry(branch_address);
-      _ AppendRelocLabelEntry(branchAddressLabel);
+      _                AppendRelocLabelEntry(branchAddressLabel);
 
       arm64_inst_t branch_instr = instr;
 
@@ -194,16 +194,16 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
       op      = op ^ 1;
       set_bit(branch_instr, 24, op);
 
-      int64_t offset = 4 * 3; // branch_instr; ldr x17, #label; br x17
-      uint32_t imm14 = offset >> 2;
+      int64_t  offset = 4 * 3; // branch_instr; ldr x17, #label; br x17
+      uint32_t imm14  = offset >> 2;
       set_bits(branch_instr, 5, 18, imm14);
 
       _ nop();
       {
         _ Emit(branch_instr);
         {
-          _ Ldr(x17, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
-          _ br(x17);
+          _ Ldr(TMP_REG_0, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
+          _ br(TMP_REG_0);
         }
       }
       _ nop();
@@ -217,19 +217,19 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
       op      = op ^ 1;
       set_bit(branch_instr, 24, op);
 
-      int64_t offset = 4 * 3;
-      uint32_t imm19 = offset >> 2;
+      int64_t  offset = 4 * 3;
+      uint32_t imm19  = offset >> 2;
       set_bits(branch_instr, 5, 23, imm19);
 
       RelocLabelEntry *branchAddressLabel = new RelocLabelEntry(branch_address);
-      _ AppendRelocLabelEntry(branchAddressLabel);
+      _                AppendRelocLabelEntry(branchAddressLabel);
 
       _ nop();
       {
         _ Emit(branch_instr);
         {
-          _ Ldr(x17, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
-          _ br(x17);
+          _ Ldr(TMP_REG_0, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
+          _ br(TMP_REG_0);
         }
       }
       _ nop();
@@ -242,19 +242,19 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
       cond      = cond ^ 1;
       set_bits(branch_instr, 0, 3, cond);
 
-      int64_t offset = 4 * 3;
-      uint32_t imm19 = offset >> 2;
+      int64_t  offset = 4 * 3;
+      uint32_t imm19  = offset >> 2;
       set_bits(branch_instr, 5, 23, imm19);
 
       RelocLabelEntry *branchAddressLabel = new RelocLabelEntry(branch_address);
-      _ AppendRelocLabelEntry(branchAddressLabel);
+      _                AppendRelocLabelEntry(branchAddressLabel);
 
       _ nop();
       {
         _ Emit(branch_instr);
         {
-          _ Ldr(x17, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
-          _ br(x17);
+          _ Ldr(TMP_REG_0, branchAddressLabel); // should we replace with `Mov` to set  X17 ?
+          _ br(TMP_REG_0);
         }
       }
       _ nop();
@@ -302,9 +302,9 @@ void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated
 
   // Generate executable code
   {
-    AssemblyCode *code = NULL;
-    code               = AssemblyCode::FinalizeFromTurboAssember(&turbo_assembler_);
-    relocated->reInitWithAddressRange(code->raw_instruction_start(), code->raw_instruction_size());
+    AssemblyCodeChunk *code = NULL;
+    code                    = AssemblyCodeBuilder::FinalizeFromTurboAssembler(&turbo_assembler_);
+    relocated->re_init_region_range(code->raw_instruction_start(), code->raw_instruction_size());
     delete code;
   }
 }

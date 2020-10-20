@@ -11,7 +11,7 @@
 #include "dobby_symbol_resolver.h"
 #include "common/headers/common_header.h"
 
-#include "UserMode/PlatformUtil/ProcessRuntimeUtility.h"
+#include "PlatformUtil/ProcessRuntimeUtility.h"
 
 #include "AndroidRestriction/android_restriction.h"
 
@@ -21,15 +21,15 @@
 #define LOG_TAG "DobbySymbolResolver"
 
 static void file_mmap(const char *file_path, uint8_t **data_ptr, size_t *data_size_ptr) {
-  int fd             = open(file_path, O_RDONLY, 0);
+  int      fd        = open(file_path, O_RDONLY, 0);
   uint8_t *mmap_data = NULL;
-  size_t file_size   = 0;
+  size_t   file_size = 0;
 
   {
     struct stat s;
-    int rt = fstat(fd, &s);
+    int         rt = fstat(fd, &s);
     if (rt != 0) {
-      LOG("mmap failed");
+      ERROR_LOG("mmap failed");
       goto finished;
     }
     file_size = s.st_size;
@@ -38,7 +38,8 @@ static void file_mmap(const char *file_path, uint8_t **data_ptr, size_t *data_si
   // auto align
   mmap_data = (uint8_t *)mmap(0, file_size, PROT_READ | PROT_WRITE, MAP_FILE | MAP_PRIVATE, fd, 0);
   if (mmap_data == MAP_FAILED) {
-    LOG("mmap failed");
+    ERROR_LOG("mmap failed");
+    goto finished;
   }
 
 finished:
@@ -50,8 +51,10 @@ finished:
 
 static void file_unmap(void *data, size_t data_size) {
   int ret = munmap(data, data_size);
-  if (ret != 0)
-    LOG("munmap failed");
+  if (ret != 0) {
+    ERROR_LOG("munmap failed");
+    return;
+  }
 }
 
 static void get_syms(ElfW(Ehdr) * header, ElfW(Sym) * *symtab_ptr, char **strtab_ptr, int *count_ptr) {
@@ -93,13 +96,13 @@ void *resolve_elf_internal_symbol(const char *library_name, const char *symbol_n
 
   ElfW(Sym) *symtab = NULL;
   char *strtab      = NULL;
-  int count         = 0;
+  int   count       = 0;
 
   if (library_name) {
     RuntimeModule module = ProcessRuntimeUtility::GetProcessModule(library_name);
 
-    uint8_t *file_mem    = NULL;
-    size_t file_mem_size = 0;
+    uint8_t *file_mem      = NULL;
+    size_t   file_mem_size = 0;
     if (module.load_address)
       file_mmap(module.path, &file_mem, &file_mem_size);
 
@@ -119,8 +122,8 @@ void *resolve_elf_internal_symbol(const char *library_name, const char *symbol_n
   if (!result) {
     std::vector<RuntimeModule> ProcessModuleMap = ProcessRuntimeUtility::GetProcessModuleMap();
     for (auto module : ProcessModuleMap) {
-      uint8_t *file_mem    = NULL;
-      size_t file_mem_size = 0;
+      uint8_t *file_mem      = NULL;
+      size_t   file_mem_size = 0;
       if (module.load_address)
         file_mmap(module.path, &file_mem, &file_mem_size);
 
@@ -145,7 +148,7 @@ void *resolve_elf_internal_symbol(const char *library_name, const char *symbol_n
 
 // impl at "android_restriction.cc"
 extern std::vector<void *> linker_get_solist();
-PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name_pattern) {
+PUBLIC void *              DobbySymbolResolver(const char *image_name, const char *symbol_name_pattern) {
   void *result = NULL;
 
   auto solist = linker_get_solist();

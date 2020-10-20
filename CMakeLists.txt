@@ -6,10 +6,13 @@ include(cmake/Util.cmake)
 include(cmake/Globals.cmake)
 include(cmake/Macros.cmake)
 include(cmake/XcodeGenerator.cmake)
+include(cmake/AutoFiles.cmake)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
+
+AutoFiles("." "CmakeSource" "\\.(cc|cpp|c|h)$")
 
 # :< You Shall Not Pass!
 if(0)
@@ -50,8 +53,12 @@ option(Plugin.Darwin.ObjectiveC "Auto hook oc method library by [DobbyOCReturnCo
 # endif()
 
 # Enable debug will log more infomation
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(DOBBY_DEBUG ON)
+endif()
 if(DOBBY_DEBUG)
   add_definitions(-DDOBBY_DEBUG)
+  add_definitions(-DLOGGING_DEBUG)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
   message(STATUS "[Dobby] Enable debug logging")
 endif()
@@ -70,7 +77,7 @@ if(SYSTEM.Darwin)
   if (NOT DOBBY_DEBUG)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-s -Wl,-X -Wl,-dead_strip")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-exported_symbol,_custom_log")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-exported_symbol,_DobbyHook -Wl,-exported_symbol,_DobbyInstrument -Wl,-exported_symbol,_DobbySymbolResolver")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-exported_symbol,_DobbyBuildVersion -Wl,-exported_symbol,_DobbyHook -Wl,-exported_symbol,_DobbyInstrument -Wl,-exported_symbol,_DobbySymbolResolver")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-exported_symbol,_dobby_enable_near_branch_trampoline -Wl,-exported_symbol,_dobby_disable_near_branch_trampoline")
   endif()
 elseif(SYSTEM.Android)
@@ -154,13 +161,11 @@ set(dobby.SOURCE_FILE_LIST ${dobby.SOURCE_FILE_LIST}
   # codegen
   source/core/modules/codegen/codegen-${core_arch}.cc
 
-  # executable memory - code buffer
-  source/CodeBufferKit/CodeBufferBase.cc
-  source/CodeBufferKit/code-buffer-${arch1}.cc
-
-  # executable memory
-  source/Helpers/AssemblyCode.cc
-  source/MemoryArena.cc
+  # memory kit
+  source/MemoryKit/CodeBuffer/CodeBufferBase.cc
+  source/MemoryKit/CodeBuffer/code-buffer-${arch1}.cc
+  source/MemoryKit/AssemblyCodeBuilder.cc
+  source/MemoryKit/MemoryArena.cc
 
   # instruction relocation
   source/InstructionRelocation/${arch1}/${ARCH1}InstructionRelocation.cc
@@ -169,16 +174,14 @@ set(dobby.SOURCE_FILE_LIST ${dobby.SOURCE_FILE_LIST}
   source/InterceptRouting/InterceptRouting.cpp
 
   # intercept routing trampoline
-  source/InterceptRouting/InterceptRoutingTrampoline/${arch1}/trampoline-${arch1}.cc
+  source/TrampolineKit/InterceptRoutingTrampoline/${arch1}/trampoline-${arch1}.cc
 
   # intercept routing plugin (buildin)
-  source/InterceptRouting/InterceptRoutingPlugin/FunctionInlineReplace/function-inline-replace.cc
-  source/InterceptRouting/InterceptRoutingPlugin/FunctionInlineReplace/FunctionInlineReplaceExport.cc
+  source/InterceptRouting/RoutingPlugin/FunctionInlineReplace/function-inline-replace.cc
+  source/InterceptRouting/RoutingPlugin/FunctionInlineReplace/FunctionInlineReplaceExport.cc
 
   # plugin register
   source/InterceptRouting/ExtraInternalPlugin/RegisterPlugin.cc
-
-  # unified interface
 
   # platform util
   source/UserMode/PlatformUtil/${platform2}/ProcesssRuntimeUtility.cc
@@ -228,15 +231,15 @@ endif()
 if(FunctionWrapper OR DynamicBinaryInstrument)
   set(dobby.SOURCE_FILE_LIST ${dobby.SOURCE_FILE_LIST}
     # closure trampoline bridge
-    source/ClosureTrampolineBridge/closure-trampoline-common-handler/closure-trampoline-common-handler.cc
-    source/ClosureTrampolineBridge/${arch1}/helper-${arch1}.cc
-    source/ClosureTrampolineBridge/${arch1}/closure-bridge-${arch1}.cc
-    source/ClosureTrampolineBridge/${arch1}/${ARCH1}AssemblyClosureTrampoline.cc
+    source/TrampolineKit/ClosureTrampolineBridge/closure-trampoline-common-handler/closure-trampoline-common-handler.cc
+    source/TrampolineKit/ClosureTrampolineBridge/${arch1}/helper-${arch1}.cc
+    source/TrampolineKit/ClosureTrampolineBridge/${arch1}/closure-bridge-${arch1}.cc
+    source/TrampolineKit/ClosureTrampolineBridge/${arch1}/${ARCH1}AssemblyClosureTrampoline.cc
 
     # user mode - multi thread support
-    source/UserMode/MultiThreadSupport/ThreadSupport.cpp
-    source/UserMode/Thread/PlatformThread.cc
-    source/UserMode/Thread/platform-thread-${platform1}.cc
+    # source/UserMode/MultiThreadSupport/ThreadSupport.cpp
+    # source/UserMode/Thread/PlatformThread.cc
+    # source/UserMode/Thread/platform-thread-${platform1}.cc
     )
 endif()
 
@@ -247,9 +250,9 @@ endif()
 if(DynamicBinaryInstrument)
   message(STATUS "[Dobby] Enable Dynamic Binary Instrument allow you instrument at any instruction")
   set(dobby.SOURCE_FILE_LIST ${dobby.SOURCE_FILE_LIST}
-    source/InterceptRouting/InterceptRoutingPlugin/DynamicBinaryInstrument/dynamic-binary-instrument.cc
-    source/InterceptRouting/InterceptRoutingPlugin/DynamicBinaryInstrument/DynamicBinaryInstrumentExport.cc
-    source/InterceptRouting/InterceptRoutingPlugin/DynamicBinaryInstrument/intercept_routing_handler.cc
+    source/InterceptRouting/RoutingPlugin/DynamicBinaryInstrument/dynamic-binary-instrument.cc
+    source/InterceptRouting/RoutingPlugin/DynamicBinaryInstrument/DynamicBinaryInstrumentExport.cc
+    source/InterceptRouting/RoutingPlugin/DynamicBinaryInstrument/intercept_routing_handler.cc
     )
 endif()
 
@@ -267,15 +270,15 @@ set(logging.SOURCE_FILE_LIST
   external/logging/cxxlogging.cc
   )
 
-# add stdcxx library
-# add_subdirectory(external/stdcxx)
-set(stdcxx.SOURCE_FILE_LIST
-  external/stdcxx/LiteObject.cc
-  external/stdcxx/LiteMemOpt.cc
-  external/stdcxx/LiteCollection.cc
-  external/stdcxx/LiteIterator.cc
-  external/stdcxx/LiteMutableArray.cc
-  external/stdcxx/LiteMutableBuffer.cc
+# add xnucxx library
+# add_subdirectory(external/xnucxx)
+set(xnucxx.SOURCE_FILE_LIST
+  external/xnucxx/LiteObject.cc
+  external/xnucxx/LiteMemOpt.cc
+  external/xnucxx/LiteCollection.cc
+  external/xnucxx/LiteIterator.cc
+  external/xnucxx/LiteMutableArray.cc
+  external/xnucxx/LiteMutableBuffer.cc
   )
 
 set(dobby.plugin.SOURCE_FILE_LIST
@@ -329,7 +332,6 @@ endif()
 
 if(Plugin.HideSystemCall)
   set(dobby.plugin.SOURCE_FILE_LIST ${dobby.plugin.SOURCE_FILE_LIST}
-    builtin-plugin/HideSystemCall/syscall.darwin.S
     )
 endif()
 
@@ -343,10 +345,12 @@ include_directories(
   .
   ./source
   ./source/UserMode
+  ./source/MemoryKit
+  ./source/TrampolineKit
 
   ./external
   ./external/logging
-  ./external/stdcxx
+  ./external/xnucxx
 
   builtin-plugin
   builtin-plugin/AndroidRestriction
@@ -359,6 +363,24 @@ set(dobby.HEADER_FILE_LIST
   include/dobby.h
 )
 
+# add build version
+string(TIMESTAMP TODAY "%Y%m%d")
+set(VERSION_REVISION "-${TODAY}")
+if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  execute_process(
+    COMMAND git rev-parse --short --verify HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE VERSION_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(VERSION_COMMIT_HASH)
+    set(VERSION_REVISION "${VERSION_REVISION}-${VERSION_COMMIT_HASH}")
+  endif()
+endif()
+set(DOBBY_BUILD_VERSION "Dobby${VERSION_REVISION}")
+message(STATUS "Version: ${DOBBY_BUILD_VERSION}")
+add_definitions(-D__DOBBY_BUILD_VERSION__="${DOBBY_BUILD_VERSION}")
+
 set(dobby_name dobby)
 
 if(SYSTEM.Darwin AND Darwin.GenerateFramework)
@@ -366,9 +388,9 @@ if(SYSTEM.Darwin AND Darwin.GenerateFramework)
 endif()
 
 if(DOBBY_GENERATE_SHARED)
-  add_library(${dobby_name} SHARED ${dobby.HEADER_FILE_LIST} ${dobby.SOURCE_FILE_LIST} ${logging.SOURCE_FILE_LIST} ${stdcxx.SOURCE_FILE_LIST} ${dobby.plugin.SOURCE_FILE_LIST})
+  add_library(${dobby_name} SHARED ${dobby.HEADER_FILE_LIST} ${dobby.SOURCE_FILE_LIST} ${logging.SOURCE_FILE_LIST} ${xnucxx.SOURCE_FILE_LIST} ${dobby.plugin.SOURCE_FILE_LIST})
 else()
-  add_library(${dobby_name} STATIC ${dobby.HEADER_FILE_LIST} ${dobby.SOURCE_FILE_LIST} ${logging.SOURCE_FILE_LIST} ${stdcxx.SOURCE_FILE_LIST} ${dobby.plugin.SOURCE_FILE_LIST})
+  add_library(${dobby_name} STATIC ${dobby.HEADER_FILE_LIST} ${dobby.SOURCE_FILE_LIST} ${logging.SOURCE_FILE_LIST} ${xnucxx.SOURCE_FILE_LIST} ${dobby.plugin.SOURCE_FILE_LIST})
 endif()
 
 target_include_directories(${dobby_name} PUBLIC include)

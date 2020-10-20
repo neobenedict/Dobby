@@ -3,13 +3,11 @@
 
 #include "Interceptor.h"
 
-#include "Helpers//AssemblyCode.h"
-
-class CodeBuffer;
+#include "MemoryKit/AssemblyCodeBuilder.h"
 
 extern CodeBufferBase *GenerateNormalTrampolineBuffer(addr_t from, addr_t to);
 
-extern void GenRelocateCode(void *buffer, AssemblyCode *origin, AssemblyCode *relocated);
+extern void GenRelocateCode(void *buffer, AssemblyCodeChunk *origin, AssemblyCodeChunk *relocated);
 
 class InterceptRouting {
 public:
@@ -62,13 +60,13 @@ protected:
   HookEntry *entry_;
 
   // origin code
-  AssemblyCode *origin_;
+  AssemblyCodeChunk *origin_;
 
   // origin code
-  AssemblyCode *relocated_;
+  AssemblyCodeChunk *relocated_;
 
   // trampoline
-  AssemblyCode *trampoline_;
+  AssemblyCodeChunk *trampoline_;
 
   // trampoline buffer before active
   CodeBufferBase *trampoline_buffer_;

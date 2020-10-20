@@ -3,24 +3,21 @@
 
 #include "dobby.h"
 
-#include "PlatformUnifiedInterface/Platform.h"
-
 #include "logging/logging.h"
 #include "logging/check_logging.h"
 
-#include "stdcxx/LiteMemOpt.h"
-#include "stdcxx/LiteMutableArray.h"
-#include "stdcxx/LiteMutableBuffer.h"
-#include "stdcxx/LiteIterator.h"
+#include "xnucxx/LiteMemOpt.h"
+#include "xnucxx/LiteMutableArray.h"
+#include "xnucxx/LiteMutableBuffer.h"
+#include "xnucxx/LiteIterator.h"
 
-#include "PlatformUnifiedInterface/Platform.h"
+#include "UnifiedInterface/platform.h"
 #include "PlatformUnifiedInterface/StdMemory.h"
 #include "PlatformUnifiedInterface/ExecMemory/CodePatchTool.h"
 #include "PlatformUnifiedInterface/ExecMemory/ClearCacheTool.h"
 
-#include "MemoryArena.h"
-
-#include "Helpers/AssemblyCode.h"
+#include "MemoryKit/MemoryArena.h"
+#include "MemoryKit/AssemblyCodeBuilder.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -28,11 +25,10 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-typedef struct _InstructionBackupArray {
-  void *address;
-  int size;
-  char data[64];
-} InstructionBackupArray;
+typedef struct _AssemblyCodeChunkBuffer {
+  AssemblyCodeChunk chunk;
+  uint8_t           chunk_buffer[64];
+} AssemblyCodeChunkBuffer;
 
 typedef struct _HookEntry {
   union {
@@ -53,8 +49,7 @@ typedef struct _HookEntry {
     void *relocated_origin_function;
   };
 
-  // backup origin instructions
-  InstructionBackupArray origin_instructions;
+  AssemblyCodeChunkBuffer origin_chunk_;
 } HookEntry;
 
 #endif

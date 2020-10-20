@@ -7,10 +7,12 @@
 #include "core/arch/arm64/registers-arm64.h"
 #include "core/modules/assembler/assembler.h"
 
-#include "CodeBufferKit/code-buffer-arm64.h"
+#include "CodeBuffer/code-buffer-arm64.h"
 
-#include "stdcxx/LiteMutableArray.h"
-#include "stdcxx/LiteIterator.h"
+#include "xnucxx/LiteMutableArray.h"
+#include "xnucxx/LiteIterator.h"
+
+#include "dobby_internal.h"
 
 static inline int32_t Low16Bits(int32_t value) {
   return static_cast<int32_t>(value & 0xffff);
@@ -31,14 +33,15 @@ static inline int32_t High32Bits(int64_t value) {
 namespace zz {
 namespace arm64 {
 
-constexpr Register TMP0 = x17;
-constexpr Register TMP1 = x16;
+constexpr Register TMP_REG_0 = X(ARM64_TMP_REG_NDX_0);
 
-#define Rd(rd) (rd.code() << kRdShift)
-#define Rt(rt) (rt.code() << kRtShift)
+constexpr Register TMP_REG_1 = X(ARM64_TMP_REG_NDX_1);
+
+#define Rd(rd)  (rd.code() << kRdShift)
+#define Rt(rt)  (rt.code() << kRtShift)
 #define Rt2(rt) (rt.code() << kRt2Shift)
-#define Rn(rn) (rn.code() << kRnShift)
-#define Rm(rm) (rm.code() << kRmShift)
+#define Rn(rn)  (rn.code() << kRnShift)
+#define Rm(rm)  (rm.code() << kRmShift)
 
 // ================================================================
 // PseudoLabel
@@ -48,7 +51,7 @@ public:
   enum PseudoLabelType { kLdrLiteral };
 
   typedef struct _PseudoLabelInstruction {
-    int position_;
+    int             position_;
     PseudoLabelType type_;
   } PseudoLabelInstruction;
 
@@ -77,14 +80,14 @@ public:
     for (size_t i = 0; i < instructions_.getCount(); i++) {
       PseudoLabelInstruction *instruction = (PseudoLabelInstruction *)instructions_.getObject(i);
 
-      int32_t offset       = pos() - instruction->position_;
-      const int32_t inst32 = _buffer->LoadInst(instruction->position_);
-      int32_t encoded      = 0;
+      int32_t       offset  = pos() - instruction->position_;
+      const int32_t inst32  = _buffer->LoadInst(instruction->position_);
+      int32_t       encoded = 0;
 
       switch (instruction->type_) {
       case kLdrLiteral: {
         encoded = inst32 & 0xFF00001F;
-        encoded = encoded | LFT((offset >> 2), 19, 5);
+        encoded = encoded | LeftShift((offset >> 2), 19, 5);
       } break;
       default:
         UNREACHABLE();
@@ -178,11 +181,11 @@ public:
   }
 
 private:
-  int64_t immediate_;
+  int64_t  immediate_;
   Register reg_;
-  Shift shift_;
-  Extend extend_;
-  int32_t shift_extent_imm_;
+  Shift    shift_;
+  Extend   extend_;
+  int32_t  shift_extent_imm_;
 };
 
 // ================================================================
@@ -262,11 +265,11 @@ public:
 private:
   Register base_;
   Register regoffset_;
-  int64_t offset_;
+  int64_t  offset_;
   AddrMode addrmode_;
-  Shift shift_;
-  Extend extend_;
-  int32_t shift_extend_imm_;
+  Shift    shift_;
+  Extend   extend_;
+  int32_t  shift_extend_imm_;
 };
 
 // ================================================================
@@ -281,7 +284,7 @@ public:
   // register operation size, 32 bits or 64 bits
   static int32_t sf(const Register &reg) {
     if (reg.Is64Bits())
-      return LFT(1, 1, 31);
+      return LeftShift(1, 1, 31);
     return 0;
   }
 
@@ -292,21 +295,21 @@ public:
   // register type, SIMD_FD register or general register
   static int32_t V(const Register &reg) {
     if (reg.IsVRegister())
-      return LFT(1, 1, 26);
+      return LeftShift(1, 1, 26);
     return 0;
   }
 
   // load or store
   static int32_t L(bool load_or_store) {
     if (load_or_store) {
-      return LFT(1, 1, 22);
+      return LeftShift(1, 1, 22);
     }
     return 0;
   }
 
   // shift type
   static int32_t shift(Shift shift) {
-    return LFT(shift, 2, 22);
+    return LeftShift(shift, 2, 22);
   }
 
   // LogicalImmeidate
@@ -317,20 +320,20 @@ public:
     imms = bits(imm, 6, 11);
     N    = bit(imm, 12);
 
-    return (sf(rd) | LFT(immr, 6, 16) | LFT(imms, 6, 10) | Rd(rd) | Rn(rn));
+    return (sf(rd) | LeftShift(immr, 6, 16) | LeftShift(imms, 6, 10) | Rd(rd) | Rn(rn));
   }
 
   // LogicalShift
   static int32_t EncodeLogicalShift(const Register &rd, const Register &rn, const Operand &operand) {
-    return (sf(rd) | shift(operand.shift()) | Rm(operand.reg()) | LFT(operand.shift_extend_imm(), 6, 10) | Rn(rn) |
-            Rd(rd));
+    return (sf(rd) | shift(operand.shift()) | Rm(operand.reg()) | LeftShift(operand.shift_extend_imm(), 6, 10) |
+            Rn(rn) | Rd(rd));
   }
 
   // LoadStore
   static int32_t LoadStorePair(LoadStorePairOp op, CPURegister rt, CPURegister rt2, const MemOperand &addr) {
     int32_t scale = 2;
     int32_t opc   = 0;
-    int imm7;
+    int     imm7;
     opc = bits(op, 30, 31);
     if (rt.IsRegister()) {
       scale += bit(opc, 1);
@@ -339,7 +342,7 @@ public:
     }
 
     imm7 = (int)(addr.offset() >> scale);
-    return LFT(imm7, 7, 15);
+    return LeftShift(imm7, 7, 15);
   }
 
   // scale
@@ -362,7 +365,7 @@ public:
     DLOG("Initialize assembler code buffer at %p", (CodeBufferBase *)buffer_->getRawBuffer());
   }
   ~Assembler() {
-    if(buffer_)
+    if (buffer_)
       delete buffer_;
   }
 
@@ -383,15 +386,15 @@ public:
   }
 
   void brk(int code) {
-    Emit(BRK | LFT(code, 16, 5));
+    Emit(BRK | LeftShift(code, 16, 5));
   }
 
   void adrp(const Register &rd, int64_t imm) {
     DCHECK(rd.Is64Bits());
-    DCHECK(ABS(imm) < (1 << 21));
+    DCHECK((abs(imm) >> 12) < (1 << 21));
 
-    int64_t immlo = LFT(bits(imm >> 12, 0, 1), 2, 29);
-    int64_t immhi = LFT(bits(imm >> 12, 2, 20), 19, 5);
+    int64_t immlo = LeftShift(bits(imm >> 12, 0, 1), 2, 29);
+    int64_t immhi = LeftShift(bits(imm >> 12, 2, 20), 19, 5);
     Emit(ADRP | Rd(rd) | immlo | immhi);
   }
 
@@ -517,11 +520,11 @@ public:
 private:
   // label helpers.
   static constexpr int kStartOfLabelLinkChain = 0;
-  int LinkAndGetByteOffsetTo(Label *label);
+  int                  LinkAndGetByteOffsetTo(Label *label);
 
   // load helpers.
   void EmitLoadRegLiteral(LoadRegLiteralOp op, CPURegister rt, int64_t imm) {
-    const int32_t encoding = op | LFT(imm, 26, 5) | Rt(rt);
+    const int32_t encoding = op | LeftShift(imm, 26, 5) | Rt(rt);
     Emit(encoding);
   }
 
@@ -530,7 +533,7 @@ private:
     if (addr.IsImmediateOffset()) {
       // TODO: check Scaled ???
       imm12 = addr.offset() >> OpEncode::scale(LoadStoreUnsignedOffsetFixed | op);
-      Emit(LoadStoreUnsignedOffsetFixed | op | LFT(imm12, 12, 10) | Rn(addr.base()) | Rt(rt));
+      Emit(LoadStoreUnsignedOffsetFixed | op | LeftShift(imm12, 12, 10) | Rn(addr.base()) | Rt(rt));
     } else if (addr.IsRegisterOffset()) {
       UNREACHABLE();
     } else {
@@ -561,14 +564,14 @@ private:
     else
       shift = 0;
 
-    int32_t imm16 = LFT(imm, 16, 5);
-    Emit(MoveWideImmediateFixed | op | OpEncode::sf(rd) | LFT(shift, 2, 21) | imm16 | Rd(rd));
+    int32_t imm16 = LeftShift(imm, 16, 5);
+    Emit(MoveWideImmediateFixed | op | OpEncode::sf(rd) | LeftShift(shift, 2, 21) | imm16 | Rd(rd));
   }
 
   void AddSubImmediate(const Register &rd, const Register &rn, const Operand &operand, AddSubImmediateOp op) {
     if (operand.IsImmediate()) {
       int64_t immediate = operand.Immediate();
-      int32_t imm12     = LFT(immediate, 12, 10);
+      int32_t imm12     = LeftShift(immediate, 12, 10);
       Emit(op | Rd(rd) | Rn(rn) | imm12);
     } else {
       UNREACHABLE();
@@ -602,8 +605,8 @@ public:
   }
 
   void CallFunction(ExternalReference function) {
-    Mov(TMP0, (uint64_t)function.address());
-    blr(TMP0);
+    Mov(TMP_REG_0, (uint64_t)function.address());
+    blr(TMP_REG_0);
   }
 
   void Ldr(Register rt, PseudoLabel *label) {

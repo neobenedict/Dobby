@@ -1,5 +1,3 @@
-#include "dobby_internal.h"
-
 #include "PlatformUtil/ProcessRuntimeUtility.h"
 
 #include <elf.h>
@@ -46,14 +44,14 @@ std::vector<MemoryRegion> ProcessRuntimeUtility::GetProcessMemoryLayout() {
         break;
     }
 
-    addr_t region_start;
-    addr_t region_end;
-    addr_t region_offset;
-    char permissions[5] = {'\0'}; // Ensure NUL-terminated string.
-    uint8_t dev_major   = 0;
-    uint8_t dev_minor   = 0;
-    long inode          = 0;
-    int path_index      = 0;
+    addr_t  region_start;
+    addr_t  region_end;
+    addr_t  region_offset;
+    char    permissions[5] = {'\0'}; // Ensure NUL-terminated string.
+    uint8_t dev_major      = 0;
+    uint8_t dev_minor      = 0;
+    long    inode          = 0;
+    int     path_index     = 0;
 
     // Sample format from man 5 proc:
     //
@@ -120,14 +118,14 @@ static std::vector<RuntimeModule> get_process_map_with_proc_maps() {
         break;
     }
 
-    addr_t region_start;
-    addr_t region_end;
-    addr_t region_offset;
-    char permissions[5] = {'\0'}; // Ensure NUL-terminated string.
-    uint8_t dev_major   = 0;
-    uint8_t dev_minor   = 0;
-    long inode          = 0;
-    int path_index      = 0;
+    addr_t  region_start;
+    addr_t  region_end;
+    addr_t  region_offset;
+    char    permissions[5] = {'\0'}; // Ensure NUL-terminated string.
+    uint8_t dev_major      = 0;
+    uint8_t dev_minor      = 0;
+    long    inode          = 0;
+    int     path_index     = 0;
 
     // Sample format from man 5 proc:
     //
@@ -147,7 +145,7 @@ static std::vector<RuntimeModule> get_process_map_with_proc_maps() {
     }
 
     // check header section permission
-    if(strcmp(permissions, "r--p") != 0 && strcmp(permissions, "r-xp") != 0)
+    if (strcmp(permissions, "r--p") != 0 && strcmp(permissions, "r-xp") != 0)
       continue;
 
     // check elf magic number
@@ -158,7 +156,7 @@ static std::vector<RuntimeModule> get_process_map_with_proc_maps() {
 
     RuntimeModule module;
     strncpy(module.path, line_buffer + path_index, 1024 - 1);
-    if(module.path[strlen(module.path) - 1] == '\n') {
+    if (module.path[strlen(module.path) - 1] == '\n') {
       module.path[strlen(module.path) - 1] = 0;
     }
     module.load_address = (void *)region_start;

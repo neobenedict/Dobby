@@ -6,10 +6,10 @@
 #include "core/arch/x64/registers-x64.h"
 #include "core/modules/assembler/assembler.h"
 
-#include "CodeBufferKit/code-buffer-x64.h"
+#include "CodeBuffer/code-buffer-x64.h"
 
-#include "stdcxx/LiteMutableArray.h"
-#include "stdcxx/LiteIterator.h"
+#include "xnucxx/LiteMutableArray.h"
+#include "xnucxx/LiteIterator.h"
 
 #define IsInt8(imm) (-128 <= imm && imm <= 127)
 
@@ -26,7 +26,7 @@ public:
   enum PseudoLabelType { kDisp32_off_9 };
 
   typedef struct _PseudoLabelInstruction {
-    int position_;
+    int             position_;
     PseudoLabelType type_;
   } PseudoLabelInstruction;
 
@@ -96,9 +96,9 @@ private:
   int data_size_;
 };
 
-#define ModRM_Mod(byte) ((byte & 0b11000000) >> 6)
+#define ModRM_Mod(byte)       ((byte & 0b11000000) >> 6)
 #define ModRM_RegOpcode(byte) ((byte & 0b00111000) >> 3)
-#define ModRM_RM(byte) (byte & 0b00000111)
+#define ModRM_RM(byte)        (byte & 0b00000111)
 
 typedef union _ModRM {
   byte_t ModRM;
@@ -353,7 +353,7 @@ public:
     DLOG("Assembler buffer at %p", (CodeBufferBase *)buffer_->getRawBuffer());
   }
   ~Assembler() {
-    if(buffer_)
+    if (buffer_)
       delete buffer_;
   }
 
@@ -537,7 +537,7 @@ public:
   void jmp(Immediate imm);
 
   void sub(Register dst, Immediate imm) {
-    CHECK_EQ(dst.size(), 64);
+    DCHECK_EQ(dst.size(), 64);
 
     EmitREX_Register(dst);
     EmitOpcode(0x81);
@@ -545,7 +545,7 @@ public:
   }
 
   void add(Register dst, Immediate imm) {
-    CHECK_EQ(dst.size(), 64);
+    DCHECK_EQ(dst.size(), 64);
 
     EmitREX_Register(dst);
     EmitOpcode(0x81);
